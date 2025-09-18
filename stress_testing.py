@@ -9,9 +9,13 @@ from collections import defaultdict, deque
 
 import httpx
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
-DEFAULT_URL = "https://yral-video-gen-llm-handler.fly.dev/v1/split"
+DEFAULT_URL = "https://video-gen-llm-handler-router.fly.dev/v1/split"
 DEFAULT_PROMPT = "A cinematic sunset over mountains with orchestral score."
 
 
@@ -102,6 +106,9 @@ async def generate_tokens(token_q: asyncio.Queue, rps: int, duration_s: float) -
 async def run_load(url: str, prompt: str, rps: int, duration_s: float, concurrency: int, timeout_s: float, insecure: bool, report_every_s: float, log_file=None) -> dict:
     metrics = Metrics()
     headers = {"content-type": "application/json"}
+    token = os.environ.get("JWT_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     payload = {"prompt": prompt}
 
     limits = httpx.Limits(max_connections=concurrency, max_keepalive_connections=concurrency)

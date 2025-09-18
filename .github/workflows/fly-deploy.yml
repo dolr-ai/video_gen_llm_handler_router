@@ -1,0 +1,69 @@
+name: Fly Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: fly-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Ensure FLY_API_TOKEN is configured
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "${FLY_API_TOKEN}" ]; then
+            echo "Repository secret FLY_API_TOKEN is required."; exit 1;
+          fi
+
+      - name: Read Fly app name from fly.toml
+        id: app
+        run: |
+          app_name="$(awk -F'=' '/^app[[:space:]]*=/ {gsub(/"/,"",$2); gsub(/ /,"",$2); print $2; exit}' fly.toml)"
+          if [ -z "$app_name" ]; then
+            echo "Unable to determine app name from fly.toml"; exit 1;
+          fi
+          echo "app=$app_name" >> "$GITHUB_OUTPUT"
+
+      - name: Sync Fly secrets (only actual secrets)
+        shell: bash
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          secrets_count=0
+          secrets_args=""
+          
+          if [ -n "${GEMINI_API_KEY:-}" ]; then
+            secrets_args="$secrets_args GEMINI_API_KEY=\"$GEMINI_API_KEY\""
+            secrets_count=$((secrets_count + 1))
+          fi
+          
+          if [ $secrets_count -gt 0 ]; then
+            echo "Updating $secrets_count Fly secret(s) on ${{ steps.app.outputs.app }}..."
+            eval "flyctl secrets set $secrets_args -a \"${{ steps.app.outputs.app }}\""
+          else
+            echo "No secrets provided; skipping secrets update."
+          fi
+
+      - name: Deploy to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy --remote-only --config fly.toml -a "${{ steps.app.outputs.app }}"
+

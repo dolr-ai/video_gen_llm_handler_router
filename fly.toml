@@ -1,0 +1,30 @@
+app = "video-gen-llm-handler-router"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  GEMINI_MODEL = "gemini-2.0-flash"
+  LLM_TIMEOUT_S = "20"
+  MAX_CONCURRENCY = "200"
+  WEB_CONCURRENCY = "1"
+  RETRY_ATTEMPTS = "2"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "512mb"
